@@ -16,8 +16,7 @@ async function request(path, options = {}, token = null) {
     ...(options.headers || {}),
   };
 
-  // Expo fetch hỗ trợ File từ expo-file-system
-  // khi upload ảnh trên Android/iOS.
+  // Giữ nguyên cách upload đã hoạt động trên Android.
   const fetchFunction =
     isFormData && Platform.OS !== "web"
       ? expoFetch
@@ -65,8 +64,8 @@ async function request(path, options = {}, token = null) {
   return data;
 }
 
-export const userApi = {
-  // Đăng nhập
+export const productApi = {
+  // Đăng nhập Admin: giữ nguyên API cũ.
   login: (email, matkhau) =>
     request("/api/users/login", {
       method: "POST",
@@ -76,43 +75,43 @@ export const userApi = {
       }),
     }),
 
-  // Lấy danh sách người dùng
-  getUsers: (token) =>
-    request("/api/users", {}, token),
+  // Lấy danh sách sản phẩm.
+  getProducts: (token) =>
+    request("/api/products", {}, token),
 
-  // Thêm người dùng
-  createUser: (user, token) =>
+  // Thêm sản phẩm.
+  createProduct: (product, token) =>
     request(
-      "/api/users",
+      "/api/products",
       {
         method: "POST",
-        body: JSON.stringify(user),
+        body: JSON.stringify(product),
       },
       token
     ),
 
-  // Cập nhật người dùng
-  updateUser: (id, user, token) =>
+  // Sửa sản phẩm.
+  updateProduct: (id, product, token) =>
     request(
-      `/api/users/${id}`,
+      `/api/products/${id}`,
       {
         method: "PUT",
-        body: JSON.stringify(user),
+        body: JSON.stringify(product),
       },
       token
     ),
 
-  // Xóa người dùng
-  deleteUser: (id, token) =>
+  // Xóa sản phẩm.
+  deleteProduct: (id, token) =>
     request(
-      `/api/users/${id}`,
+      `/api/products/${id}`,
       {
         method: "DELETE",
       },
       token
     ),
 
-  // Upload ảnh lên Cloudinary qua backend
+  // Upload ảnh sản phẩm lên Cloudinary.
   uploadImage: (formData, token) =>
     request(
       "/api/upload",

@@ -22,14 +22,25 @@ import {
 
 import * as ImagePicker from "expo-image-picker";
 import { File } from "expo-file-system";
-import { userApi } from "./api";
+import { productApi } from "./api";
 
+// Chỉ có 4 trường sản phẩm theo yêu cầu đề thi.
 const emptyForm = {
-  email: "",
-  matkhau: "",
-  hoten: "",
-  hinhanh: "",
+  name: "",
+  price: "",
+  soluong: "",
+  image: "",
 };
+
+function formatPrice(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "0 đ";
+  }
+
+  return `${number.toLocaleString("vi-VN")} đ`;
+}
 
 function Button({
   title,
@@ -70,7 +81,9 @@ function Field({
 }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>
+        {label}
+      </Text>
 
       <TextInput
         style={styles.input}
@@ -93,7 +106,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] =
     useState("");
 
-  const [users, setUsers] = useState([]);
+  const [products, setProducts] = useState([]);
 
   const [screen, setScreen] =
     useState("list");
@@ -114,7 +127,10 @@ export default function App() {
     useState("");
 
   const showError = (error) => {
-    console.error("Application error:", error);
+    console.error(
+      "Application error:",
+      error
+    );
 
     setMessage(
       error?.message || "Đã xảy ra lỗi"
@@ -122,17 +138,17 @@ export default function App() {
   };
 
   // =========================
-  // LOAD USERS
+  // LOAD PRODUCTS
   // =========================
 
-  const loadUsers = useCallback(async () => {
+  const loadProducts = useCallback(async () => {
     if (!token) return;
 
     try {
       const data =
-        await userApi.getUsers(token);
+        await productApi.getProducts(token);
 
-      setUsers(
+      setProducts(
         Array.isArray(data) ? data : []
       );
     } catch (error) {
@@ -141,8 +157,8 @@ export default function App() {
   }, [token]);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    loadProducts();
+  }, [loadProducts]);
 
   // =========================
   // LOGIN
@@ -163,7 +179,7 @@ export default function App() {
     setMessage("");
 
     try {
-      const data = await userApi.login(
+      const data = await productApi.login(
         loginEmail.trim(),
         loginPassword
       );
@@ -185,6 +201,20 @@ export default function App() {
   }
 
   // =========================
+  // LOGOUT
+  // =========================
+
+  function handleLogout() {
+    setToken(null);
+    setProducts([]);
+    setForm({ ...emptyForm });
+    setEditingId(null);
+    setSearch("");
+    setMessage("");
+    setScreen("list");
+  }
+
+  // =========================
   // OPEN ADD FORM
   // =========================
 
@@ -199,14 +229,14 @@ export default function App() {
   // OPEN EDIT FORM
   // =========================
 
-  function openEdit(user) {
-    setEditingId(user._id);
+  function openEdit(product) {
+    setEditingId(product._id);
 
     setForm({
-      email: user.email,
-      hoten: user.hoten,
-      hinhanh: user.hinhanh || "",
-      matkhau: "",
+      name: product.name || "",
+      price: String(product.price ?? ""),
+      soluong: String(product.soluong ?? ""),
+      image: product.image || "",
     });
 
     setMessage("");
@@ -224,7 +254,7 @@ export default function App() {
     setMessage("");
 
     try {
-      // Trên Android/iOS yêu cầu quyền truy cập ảnh
+      // Android/iOS: xin quyền truy cập thư viện ảnh.
       if (Platform.OS !== "web") {
         const permission =
           await ImagePicker
@@ -263,7 +293,7 @@ export default function App() {
       const imageForm = new FormData();
 
       if (Platform.OS === "web") {
-        // WEB: Sử dụng Blob như trước
+        // WEB: Giữ nguyên cách upload bằng Blob.
         const imageResponse =
           await fetch(asset.uri);
 
@@ -279,12 +309,12 @@ export default function App() {
         imageForm.append(
           "image",
           blob,
-          asset.fileName || "avatar.jpg"
+          asset.fileName || "product.jpg"
         );
       } else {
-        // ANDROID / IOS:
-        // Dùng File của expo-file-system
-        // thay vì object {uri, name, type}.
+        // ANDROID/iOS:
+        // Dùng File từ expo-file-system.
+        // api.js sẽ sử dụng expo/fetch.
         const file = new File(asset.uri);
 
         imageForm.append(
@@ -293,15 +323,13 @@ export default function App() {
         );
       }
 
-      // api.js sẽ sử dụng expo/fetch
-      // cho FormData trên Android/iOS.
       const data =
-        await userApi.uploadImage(
+        await productApi.uploadImage(
           imageForm,
           token
         );
 
-      if (!data.hinhanh) {
+      if (!data.image) {
         throw new Error(
           "Upload thành công nhưng server không trả về URL ảnh"
         );
@@ -309,11 +337,11 @@ export default function App() {
 
       setForm((current) => ({
         ...current,
-        hinhanh: data.hinhanh,
+        image: data.image,
       }));
 
       setMessage(
-        "Upload ảnh thành công"
+        "Upload ảnh sản phẩm thành công"
       );
     } catch (error) {
       showError(error);
@@ -323,26 +351,46 @@ export default function App() {
   }
 
   // =========================
-  // CREATE / UPDATE USER
+  // CREATE / UPDATE PRODUCT
   // =========================
 
-  async function saveUser() {
-    if (
-      !form.email.trim() ||
-      !form.hoten.trim()
-    ) {
+  async function saveProduct() {
+    if (!form.name.trim()) {
       setMessage(
-        "Vui lòng nhập email và họ tên"
+        "Vui lòng nhập tên sản phẩm"
       );
       return;
     }
 
     if (
-      !editingId &&
-      !form.matkhau
+      form.price.trim() === "" ||
+      form.soluong.trim() === ""
     ) {
       setMessage(
-        "Vui lòng nhập mật khẩu"
+        "Vui lòng nhập giá và số lượng sản phẩm"
+      );
+      return;
+    }
+
+    const price = Number(form.price);
+    const soluong = Number(form.soluong);
+
+    if (
+      !Number.isFinite(price) ||
+      price < 0
+    ) {
+      setMessage(
+        "Giá sản phẩm phải là số không âm"
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(soluong) ||
+      soluong < 0
+    ) {
+      setMessage(
+        "Số lượng phải là số nguyên không âm"
       );
       return;
     }
@@ -351,36 +399,37 @@ export default function App() {
     setMessage("");
 
     try {
+      // Chỉ gửi đúng 4 trường lên Backend.
       const payload = {
-        email: form.email.trim(),
-        hoten: form.hoten.trim(),
-        hinhanh: form.hinhanh,
+        name: form.name.trim(),
+        price,
+        soluong,
+        image: form.image || "",
       };
 
-      if (form.matkhau) {
-        payload.matkhau =
-          form.matkhau;
-      }
-
       if (editingId) {
-        await userApi.updateUser(
+        await productApi.updateProduct(
           editingId,
           payload,
           token
         );
       } else {
-        await userApi.createUser(
+        await productApi.createProduct(
           payload,
           token
         );
       }
 
-      await loadUsers();
+      await loadProducts();
 
       setScreen("list");
+      setEditingId(null);
+      setForm({ ...emptyForm });
 
       setMessage(
-        "Lưu người dùng thành công"
+        editingId
+          ? "Cập nhật sản phẩm thành công"
+          : "Thêm sản phẩm thành công"
       );
     } catch (error) {
       showError(error);
@@ -390,23 +439,25 @@ export default function App() {
   }
 
   // =========================
-  // DELETE USER
+  // DELETE PRODUCT
   // =========================
 
-  async function deleteUser(id) {
+  async function deleteProduct(id) {
+    if (busy) return;
+
     setBusy(true);
     setMessage("");
 
     try {
-      await userApi.deleteUser(
+      await productApi.deleteProduct(
         id,
         token
       );
 
-      await loadUsers();
+      await loadProducts();
 
       setMessage(
-        "Đã xóa người dùng"
+        "Đã xóa sản phẩm thành công"
       );
     } catch (error) {
       showError(error);
@@ -415,13 +466,13 @@ export default function App() {
     }
   }
 
-  function confirmDelete(user) {
+  function confirmDelete(product) {
     const question =
-      `Xóa người dùng ${user.hoten}?`;
+      `Bạn có chắc muốn xóa sản phẩm "${product.name}"?`;
 
     if (Platform.OS === "web") {
       if (window.confirm(question)) {
-        deleteUser(user._id);
+        deleteProduct(product._id);
       }
     } else {
       Alert.alert(
@@ -436,7 +487,7 @@ export default function App() {
             text: "Xóa",
             style: "destructive",
             onPress: () =>
-              deleteUser(user._id),
+              deleteProduct(product._id),
           },
         ]
       );
@@ -444,19 +495,16 @@ export default function App() {
   }
 
   // =========================
-  // SEARCH USERS
+  // SEARCH PRODUCTS
   // =========================
 
-  const filteredUsers =
-    users.filter((user) => {
+  const filteredProducts =
+    products.filter((product) => {
       const keyword =
         search.toLowerCase().trim();
 
       return (
-        (user.hoten || "")
-          .toLowerCase()
-          .includes(keyword) ||
-        (user.email || "")
+        (product.name || "")
           .toLowerCase()
           .includes(keyword)
       );
@@ -471,54 +519,61 @@ export default function App() {
       <SafeAreaView
         style={styles.container}
       >
-        <View
-          style={styles.loginContainer}
+        <ScrollView
+          contentContainerStyle={
+            styles.loginScroll
+          }
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.title}>
-            User Management
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Đăng nhập hệ thống quản trị
-          </Text>
-
-          <Field
-            label="Email"
-            value={loginEmail}
-            onChangeText={setLoginEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            placeholder="admin@example.com"
-          />
-
-          <Field
-            label="Mật khẩu"
-            value={loginPassword}
-            onChangeText={
-              setLoginPassword
-            }
-            secureTextEntry
-            placeholder="Nhập mật khẩu"
-          />
-
-          {message ? (
-            <Text
-              style={styles.message}
-            >
-              {message}
+          <View
+            style={styles.loginContainer}
+          >
+            <Text style={styles.title}>
+              Product Management
             </Text>
-          ) : null}
 
-          <Button
-            title={
-              busy
-                ? "Đang đăng nhập..."
-                : "Đăng nhập"
-            }
-            onPress={handleLogin}
-            disabled={busy}
-          />
-        </View>
+            <Text style={styles.subtitle}>
+              Đăng nhập hệ thống quản lý sản phẩm
+            </Text>
+
+            <Field
+              label="Email"
+              value={loginEmail}
+              onChangeText={setLoginEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholder="admin@example.com"
+            />
+
+            <Field
+              label="Mật khẩu"
+              value={loginPassword}
+              onChangeText={
+                setLoginPassword
+              }
+              secureTextEntry
+              placeholder="Nhập mật khẩu"
+            />
+
+            {message ? (
+              <Text
+                style={styles.message}
+              >
+                {message}
+              </Text>
+            ) : null}
+
+            <Button
+              title={
+                busy
+                  ? "Đang đăng nhập..."
+                  : "Đăng nhập"
+              }
+              onPress={handleLogin}
+              disabled={busy}
+            />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -536,7 +591,7 @@ export default function App() {
           <Text
             style={styles.headerTitle}
           >
-            Quản lý người dùng
+            Quản lý sản phẩm
           </Text>
 
           <Text
@@ -549,12 +604,8 @@ export default function App() {
         <Button
           title="Đăng xuất"
           secondary
-          onPress={() => {
-            setToken(null);
-            setUsers([]);
-            setMessage("");
-            setScreen("list");
-          }}
+          disabled={busy}
+          onPress={handleLogout}
         />
       </View>
 
@@ -567,19 +618,21 @@ export default function App() {
       {busy && (
         <ActivityIndicator
           color="#174ea6"
-          style={{ marginVertical: 8 }}
+          style={{
+            marginVertical: 8,
+          }}
         />
       )}
 
       {screen === "list" ? (
         // =====================
-        // USER LIST
+        // PRODUCT LIST
         // =====================
 
         <View style={styles.content}>
           <View style={styles.toolbar}>
             <Button
-              title="+ Thêm"
+              title="+ Thêm sản phẩm"
               onPress={openAdd}
               disabled={busy}
             />
@@ -587,71 +640,88 @@ export default function App() {
             <Button
               title="Làm mới"
               secondary
-              onPress={loadUsers}
+              onPress={loadProducts}
               disabled={busy}
             />
           </View>
 
           <TextInput
             style={styles.input}
-            placeholder={
-              "Tìm theo họ tên hoặc email..."
-            }
+            placeholder="Tìm theo tên sản phẩm..."
+            placeholderTextColor="#94a3b8"
             value={search}
             onChangeText={setSearch}
           />
 
+          <Text style={styles.resultCount}>
+            Tổng số sản phẩm: {filteredProducts.length}
+          </Text>
+
           <FlatList
-            data={filteredUsers}
+            data={filteredProducts}
             keyExtractor={(item) =>
               item._id
             }
+            contentContainerStyle={
+              styles.listContainer
+            }
             ListEmptyComponent={
               <Text style={styles.empty}>
-                Chưa có người dùng phù hợp
+                Chưa có sản phẩm phù hợp
               </Text>
             }
             renderItem={({ item }) => (
               <View
-                style={styles.userCard}
+                style={styles.productCard}
               >
-                {item.hinhanh ? (
+                {item.image ? (
                   <Image
                     source={{
-                      uri: item.hinhanh,
+                      uri: item.image,
                     }}
-                    style={styles.avatar}
+                    style={
+                      styles.productImage
+                    }
+                    resizeMode="cover"
                   />
                 ) : (
                   <View
                     style={[
-                      styles.avatar,
-                      styles.noAvatar,
+                      styles.productImage,
+                      styles.noImage,
                     ]}
                   >
                     <Text
-                      style={styles.avatarText}
+                      style={
+                        styles.noImageText
+                      }
                     >
-                      {(item.hoten || "?")
-                        .charAt(0)
-                        .toUpperCase()}
+                      Chưa có ảnh
                     </Text>
                   </View>
                 )}
 
                 <View
-                  style={styles.userInfo}
+                  style={styles.productInfo}
                 >
                   <Text
-                    style={styles.userName}
+                    style={styles.productName}
                   >
-                    {item.hoten}
+                    {item.name}
                   </Text>
 
                   <Text
-                    style={styles.userEmail}
+                    style={styles.productPrice}
                   >
-                    {item.email}
+                    {formatPrice(item.price)}
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.productQuantity
+                    }
+                  >
+                    Số lượng: {item.soluong}
                   </Text>
 
                   <View
@@ -682,7 +752,7 @@ export default function App() {
         </View>
       ) : (
         // =====================
-        // ADD / EDIT FORM
+        // ADD / EDIT PRODUCT
         // =====================
 
         <ScrollView
@@ -695,29 +765,32 @@ export default function App() {
             style={styles.sectionTitle}
           >
             {editingId
-              ? "Sửa người dùng"
-              : "Thêm người dùng"}
+              ? "Sửa sản phẩm"
+              : "Thêm sản phẩm"}
           </Text>
 
           <View
             style={styles.imageContainer}
           >
-            {form.hinhanh ? (
+            {form.image ? (
               <Image
                 source={{
-                  uri: form.hinhanh,
+                  uri: form.image,
                 }}
-                style={styles.largeAvatar}
+                style={
+                  styles.largeProductImage
+                }
+                resizeMode="cover"
               />
             ) : (
               <View
                 style={[
-                  styles.largeAvatar,
-                  styles.noAvatar,
+                  styles.largeProductImage,
+                  styles.noImage,
                 ]}
               >
                 <Text>
-                  Chưa có ảnh
+                  Chưa có ảnh sản phẩm
                 </Text>
               </View>
             )}
@@ -726,7 +799,7 @@ export default function App() {
               title={
                 busy
                   ? "Đang xử lý..."
-                  : "Chọn ảnh"
+                  : "Chọn ảnh sản phẩm"
               }
               secondary
               onPress={pickImage}
@@ -735,46 +808,41 @@ export default function App() {
           </View>
 
           <Field
-            label="Họ tên"
-            value={form.hoten}
+            label="Tên sản phẩm (name)"
+            value={form.name}
             onChangeText={(value) =>
               setForm((current) => ({
                 ...current,
-                hoten: value,
+                name: value,
               }))
             }
-            placeholder="Nhập họ tên"
+            placeholder="Ví dụ: Laptop Dell Inspiron 15"
           />
 
           <Field
-            label="Email"
-            value={form.email}
+            label="Giá sản phẩm (price)"
+            value={form.price}
             onChangeText={(value) =>
               setForm((current) => ({
                 ...current,
-                email: value,
+                price: value,
               }))
             }
-            autoCapitalize="none"
-            keyboardType="email-address"
-            placeholder="Nhập email"
+            keyboardType="decimal-pad"
+            placeholder="Ví dụ: 15000000"
           />
 
           <Field
-            label={
-              editingId
-                ? "Mật khẩu mới (để trống nếu giữ nguyên)"
-                : "Mật khẩu"
-            }
-            value={form.matkhau}
+            label="Số lượng (soluong)"
+            value={form.soluong}
             onChangeText={(value) =>
               setForm((current) => ({
                 ...current,
-                matkhau: value,
+                soluong: value,
               }))
             }
-            secureTextEntry
-            placeholder="Nhập mật khẩu"
+            keyboardType="number-pad"
+            placeholder="Ví dụ: 10"
           />
 
           <View style={styles.toolbar}>
@@ -782,9 +850,11 @@ export default function App() {
               title={
                 busy
                   ? "Đang lưu..."
-                  : "Lưu"
+                  : editingId
+                    ? "Cập nhật sản phẩm"
+                    : "Lưu sản phẩm"
               }
-              onPress={saveUser}
+              onPress={saveProduct}
               disabled={busy}
             />
 
@@ -814,11 +884,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#f3f6fb",
   },
 
+  loginScroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: 24,
+  },
+
   loginContainer: {
     width: "90%",
     maxWidth: 440,
     alignSelf: "center",
-    marginTop: 100,
     backgroundColor: "#fff",
     padding: 28,
     borderRadius: 16,
@@ -842,6 +917,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 10,
   },
 
   headerTitle: {
@@ -890,6 +966,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#fff",
     fontWeight: "600",
+    textAlign: "center",
   },
 
   field: {
@@ -910,9 +987,10 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     fontSize: 15,
     marginBottom: 12,
+    color: "#1e293b",
   },
 
-  userCard: {
+  productCard: {
     backgroundColor: "#fff",
     borderRadius: 12,
     padding: 16,
@@ -922,43 +1000,62 @@ const styles = StyleSheet.create({
     gap: 14,
   },
 
-  avatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+  productImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
   },
 
-  noAvatar: {
+  noImage: {
     backgroundColor: "#dce7f8",
     alignItems: "center",
     justifyContent: "center",
   },
 
-  avatarText: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#174ea6",
+  noImageText: {
+    fontSize: 12,
+    color: "#64748b",
+    textAlign: "center",
   },
 
-  userInfo: {
+  productInfo: {
     flex: 1,
   },
 
-  userName: {
+  productName: {
     fontSize: 17,
     fontWeight: "bold",
     color: "#1e293b",
+    marginBottom: 5,
   },
 
-  userEmail: {
+  productPrice: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#dc3545",
+    marginBottom: 5,
+  },
+
+  productQuantity: {
+    fontSize: 14,
     color: "#64748b",
-    marginVertical: 5,
   },
 
   actions: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 6,
+    marginTop: 12,
+    flexWrap: "wrap",
+  },
+
+  resultCount: {
+    color: "#64748b",
+    marginBottom: 12,
+    fontSize: 13,
+  },
+
+  listContainer: {
+    paddingBottom: 30,
   },
 
   formContainer: {
@@ -982,10 +1079,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  largeAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+  largeProductImage: {
+    width: 160,
+    height: 160,
+    borderRadius: 12,
   },
 
   message: {

@@ -1,0 +1,45 @@
+[{
+  "_id": {
+    "$oid": "6af4104927ef74b31b35796c"
+  },
+  "name": "iPhone 18 Pro 256GB",
+  "price": 38690000,
+  "soluong": 12,
+  "image": "https://res.cloudinary.com/vohcx1zx/image/upload/v1794379843/midterm_crossplatform/products/rcvx3hclqagvlnrw92sa.webp"
+},
+{
+  "_id": {
+    "$oid": "6af41cac883b3969601eb6ae"
+  },
+  "name": "Laptop Dell Inspiron 15 3520 N3520-i5U085W11SLU",
+  "price": 14715500,
+  "soluong": 12,
+  "image": "https://res.cloudinary.com/vohcx1zx/image/upload/v1794383012/midterm_crossplatform/products/y4slapgktsh0va1affci.webp"
+},
+{
+  "_id": {
+    "$oid": "6af41ee7fc0664be9b410e0d"
+  },
+  "name": "iPhone 15 128GB | Chính hãng VN/A",
+  "price": 21490000,
+  "soluong": 20,
+  "image": "https://res.cloudinary.com/vohcx1zx/image/upload/v1794383591/midterm_crossplatform/products/rj05909e5eymgaglkyxy.webp"
+},
+{
+  "_id": {
+    "$oid": "6af4242b43c35a8138ab61e6"
+  },
+  "name": "Samsung Galaxy S25 Ultra 12GB 256GB",
+  "price": 25290000,
+  "soluong": 55,
+  "image": "https://res.cloudinary.com/vohcx1zx/image/upload/v1794384929/midterm_crossplatform/products/coztxhcdo1ytr6n5j3s4.webp"
+},
+{
+  "_id": {
+    "$oid": "6af424a943c35a8138ab61e7"
+  },
+  "name": "Vòng đeo tay thông minh Huawei Band 11 Pro khung kim loại",
+  "price": 1433000,
+  "soluong": 0,
+  "image": "https://res.cloudinary.com/vohcx1zx/image/upload/v1794385059/midterm_crossplatform/products/gig1lyoy5wlbrj11bg3h.webp"
+}]

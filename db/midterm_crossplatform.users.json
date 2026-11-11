@@ -1,0 +1,9 @@
+[{
+  "_id": {
+    "$oid": "6af378ac277c6127df033c88"
+  },
+  "email": "admin@example.com",
+  "matkhau": "$2b$10$GUCRjyLWT1PGBWrJLHsSUunO5c/KVPQQMH.IknCXpj1yGaD/3p8ym",
+  "hoten": "Nguyen Van A",
+  "hinhanh": "https://res.cloudinary.com/vohcx1zx/image/upload/v1794343809/midterm_crossplatform/users/b0h0hs1lptg61jt6pw7m.png"
+}]

@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 
 // Thay bằng IPv4 thực tế của máy tính
-const LAN_IP = "172.26.54.140";
+const LAN_IP = "192.168.1.134";
 
 // Đặt true khi chạy trên Android Emulator
 const USE_ANDROID_EMULATOR = false;

@@ -4,13 +4,16 @@
   "main": "index.js",
   "dependencies": {
     "@expo/metro-runtime": "~58.0.17",
+    "@expo/vector-icons": "^15.0.2",
     "expo": "~58.0.23",
     "expo-file-system": "~58.0.13",
+    "expo-font": "~58.0.11",
     "expo-image-picker": "~58.0.10",
     "expo-status-bar": "~58.0.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.11.1",
     "react-native-web": "^0.21.4"
   },
   "scripts": {
@@ -19,5 +22,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4"
+  }
 }

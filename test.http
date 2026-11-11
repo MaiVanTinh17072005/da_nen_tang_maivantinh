@@ -1,0 +1,28 @@
+
+### 1. Kiểm tra Backend
+GET http://localhost:5000/
+
+### 2. Lấy danh sách người dùng
+GET http://localhost:5000/api/users
+
+### 3. Thêm người dùng
+POST http://localhost:5000/api/users
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "matkhau": "TestPassword123!",
+  "hoten": "Nguyen Van A",
+  "hinhanh": ""
+}
+
+### 4. Kiểm tra email trùng
+POST http://localhost:5000/api/users
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "matkhau": "TestPassword123!",
+  "hoten": "Nguyen Van B",
+  "hinhanh": ""
+}

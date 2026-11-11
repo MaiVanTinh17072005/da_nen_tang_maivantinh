@@ -18,6 +18,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -33,8 +34,23 @@ import { File } from "expo-file-system";
 import { productApi } from "./api";
 
 // ========================================
-// CẤU HÌNH
+// CẤU HÌNH & TỐI ƯU GIAO DIỆN
 // ========================================
+
+// Xử lý loại bỏ khung viền đen mặc định của trình duyệt trên Web khi focus vào ô input
+if (Platform.OS === "web" && typeof document !== "undefined") {
+  const styleId = "rnw-focus-outline-fix";
+  if (!document.getElementById(styleId)) {
+    const styleEl = document.createElement("style");
+    styleEl.id = styleId;
+    styleEl.textContent = `
+      input:focus, textarea:focus, [contenteditable]:focus {
+        outline: none !important;
+      }
+    `;
+    document.head.appendChild(styleEl);
+  }
+}
 
 const PRIMARY = "#ee4d2d";
 const LOW_STOCK_LIMIT = 5;
@@ -52,16 +68,6 @@ const FILTERS = [
   { key: "in_stock", label: "Còn hàng" },
   { key: "low_stock", label: "Sắp hết" },
   { key: "out_of_stock", label: "Hết hàng" },
-];
-
-const SORT_OPTIONS = [
-  { key: "default", label: "Mặc định" },
-  { key: "price_asc", label: "Giá tăng dần" },
-  { key: "price_desc", label: "Giá giảm dần" },
-  { key: "qty_asc", label: "Kho tăng dần" },
-  { key: "qty_desc", label: "Kho giảm dần" },
-  { key: "name_asc", label: "Tên A - Z" },
-  { key: "name_desc", label: "Tên Z - A" },
 ];
 
 function formatPrice(value) {
@@ -180,20 +186,34 @@ function AppField({
   placeholder,
   icon,
   helperText,
+  isPassword = false,
+  rightIcon,
+  onRightPress,
+  secureTextEntry,
+  onFocus,
+  onBlur,
   ...props
 }) {
+  const [isFocused, setIsFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const effectiveSecure = isPassword ? !showPassword : secureTextEntry;
+
   return (
     <View style={styles.fieldGroup}>
-      <Text style={styles.fieldLabel}>
-        {label}
-      </Text>
+      {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
 
-      <View style={styles.inputWrapper}>
+      <View
+        style={[
+          styles.inputWrapper,
+          isFocused && styles.inputWrapperFocused,
+        ]}
+      >
         {icon ? (
           <Ionicons
             name={icon}
             size={19}
-            color="#94a3b8"
+            color={isFocused ? PRIMARY : "#94a3b8"}
           />
         ) : null}
 
@@ -203,8 +223,44 @@ function AppField({
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor="#94a3b8"
+          secureTextEntry={effectiveSecure}
+          onFocus={(e) => {
+            setIsFocused(true);
+            if (onFocus) onFocus(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            if (onBlur) onBlur(e);
+          }}
           {...props}
         />
+
+        {isPassword ? (
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.inputAction}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off-outline" : "eye-outline"}
+              size={20}
+              color={isFocused ? "#475569" : "#64748b"}
+            />
+          </TouchableOpacity>
+        ) : rightIcon ? (
+          <TouchableOpacity
+            onPress={onRightPress}
+            disabled={!onRightPress}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.inputAction}
+          >
+            <Ionicons
+              name={rightIcon}
+              size={20}
+              color="#64748b"
+            />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {helperText ? (
@@ -223,20 +279,27 @@ function AppField({
 function StatCard({
   title,
   value,
+  subtitle,
   icon,
   color = PRIMARY,
   background = "#fff1f0",
   onPress,
   active = false,
+  isMobile = false,
+  style,
 }) {
+  const CardWrapper = onPress ? TouchableOpacity : View;
+
   return (
-    <TouchableOpacity
+    <CardWrapper
       disabled={!onPress}
       onPress={onPress}
       activeOpacity={0.8}
       style={[
         styles.statCard,
+        isMobile && styles.statCardMobile,
         active && styles.statCardActive,
+        style,
       ]}
     >
       <View
@@ -247,23 +310,38 @@ function StatCard({
       >
         <Ionicons
           name={icon}
-          size={22}
+          size={18}
           color={color}
         />
       </View>
 
-      <Text
-        style={styles.statValue}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-      >
-        {value}
-      </Text>
+      <View style={[styles.statContent, isMobile && styles.statContentMobile]}>
+        <Text
+          style={[styles.statValue, isMobile && styles.statValueMobile]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {value}
+        </Text>
 
-      <Text style={styles.statTitle}>
-        {title}
-      </Text>
-    </TouchableOpacity>
+        <Text
+          style={[styles.statTitle, isMobile && styles.statTitleMobile]}
+          numberOfLines={isMobile ? 2 : 1}
+        >
+          {title}
+        </Text>
+
+        {subtitle ? (
+          <Text
+            style={styles.statSubtitle}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+    </CardWrapper>
   );
 }
 
@@ -399,11 +477,14 @@ function ProductCard({
 // ========================================
 
 function ProductManagementApp() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const [showOverview, setShowOverview] = useState(true);
+
   // Đăng nhập
   const [token, setToken] = useState(null);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
 
   // Sản phẩm
   const [products, setProducts] = useState([]);
@@ -413,19 +494,39 @@ function ProductManagementApp() {
 
   // Tìm kiếm, lọc, sắp xếp
   const [search, setSearch] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [sortBy, setSortBy] = useState("default");
+  const [showFilterModal, setShowFilterModal] = useState(false);
+
+  // Kiểm tra xem có filter nào đang active không
+  const isFilterActive = useMemo(() => {
+    return filterType !== "all" || sortBy !== "default";
+  }, [filterType, sortBy]);
 
   // Trạng thái
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("info");
+  const [messageKey, setMessageKey] = useState(0);
 
   function notify(text, type = "info") {
     setMessage(text);
     setMessageType(type);
+    setMessageKey((prev) => prev + 1);
   }
+
+  // Tự động tắt thông báo sau 2 giây
+  useEffect(() => {
+    if (!message) return;
+
+    const timer = setTimeout(() => {
+      setMessage("");
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [message, messageKey]);
 
   function showError(error) {
     console.error("Application error:", error);
@@ -1027,14 +1128,43 @@ function ProductManagementApp() {
                 <View
                   style={[
                     styles.messageBox,
+                    styles.loginMessageBox,
                     messageType === "error"
                       ? styles.messageError
                       : styles.messageSuccess,
                   ]}
                 >
-                  <Text style={styles.messageText}>
+                  <Ionicons
+                    name={
+                      messageType === "error"
+                        ? "alert-circle"
+                        : "checkmark-circle"
+                    }
+                    size={18}
+                    color={
+                      messageType === "error" ? "#dc2626" : "#16a34a"
+                    }
+                  />
+
+                  <Text
+                    style={[
+                      styles.messageText,
+                      { flex: 1 },
+                    ]}
+                  >
                     {message}
                   </Text>
+
+                  <TouchableOpacity
+                    onPress={() => setMessage("")}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={18}
+                      color="#64748b"
+                    />
+                  </TouchableOpacity>
                 </View>
               ) : null}
 
@@ -1048,44 +1178,14 @@ function ProductManagementApp() {
                 autoCapitalize="none"
               />
 
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>
-                  Mật khẩu
-                </Text>
-
-                <View style={styles.inputWrapper}>
-                  <Ionicons
-                    name="lock-closed-outline"
-                    size={19}
-                    color="#94a3b8"
-                  />
-
-                  <TextInput
-                    style={styles.fieldInput}
-                    value={loginPassword}
-                    onChangeText={setLoginPassword}
-                    placeholder="Nhập mật khẩu"
-                    placeholderTextColor="#94a3b8"
-                    secureTextEntry={!showPassword}
-                  />
-
-                  <TouchableOpacity
-                    onPress={() =>
-                      setShowPassword(!showPassword)
-                    }
-                  >
-                    <Ionicons
-                      name={
-                        showPassword
-                          ? "eye-off-outline"
-                          : "eye-outline"
-                      }
-                      size={20}
-                      color="#64748b"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <AppField
+                label="Mật khẩu"
+                value={loginPassword}
+                onChangeText={setLoginPassword}
+                placeholder="Nhập mật khẩu"
+                icon="lock-closed-outline"
+                isPassword
+              />
 
               <AppButton
                 title={
@@ -1138,20 +1238,25 @@ function ProductManagementApp() {
             <View style={styles.headerLogo}>
               <Ionicons
                 name="storefront"
-                size={22}
+                size={20}
                 color={PRIMARY}
               />
             </View>
 
-            <View style={{ flex: 1 }}>
+            <View style={styles.headerBrandInfo}>
               <Text
                 style={styles.headerTitle}
                 numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
               >
                 Quản Lý Gian Hàng
               </Text>
 
-              <Text style={styles.headerSubtitle}>
+              <Text
+                style={styles.headerSubtitle}
+                numberOfLines={1}
+              >
                 {statistics.totalProducts} sản phẩm
               </Text>
             </View>
@@ -1160,10 +1265,11 @@ function ProductManagementApp() {
           <TouchableOpacity
             style={styles.logoutButton}
             onPress={handleLogout}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons
               name="log-out-outline"
-              size={18}
+              size={17}
               color="#ffffff"
             />
 
@@ -1189,6 +1295,18 @@ function ProductManagementApp() {
                 : styles.messageSuccess,
             ]}
           >
+            <Ionicons
+              name={
+                messageType === "error"
+                  ? "alert-circle"
+                  : "checkmark-circle"
+              }
+              size={18}
+              color={
+                messageType === "error" ? "#dc2626" : "#16a34a"
+              }
+            />
+
             <Text
               style={[
                 styles.messageText,
@@ -1200,6 +1318,7 @@ function ProductManagementApp() {
 
             <TouchableOpacity
               onPress={() => setMessage("")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons
                 name="close"
@@ -1223,6 +1342,189 @@ function ProductManagementApp() {
           </View>
         ) : null}
 
+        {/* MODAL LỌC */}
+        {showFilterModal && (
+          <View style={styles.filterModal}>
+            <View style={styles.filterModalContent}>
+              <View style={styles.filterModalHeader}>
+                <Text style={styles.filterModalTitle}>
+                  Tùy chọn tìm kiếm
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowFilterModal(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close" size={24} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Trạng thái kho */}
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterGroupTitle}>Trạng thái kho</Text>
+                <View style={styles.filterOptions}>
+                  {FILTERS.map((filter) => (
+                    <TouchableOpacity
+                      key={filter.key}
+                      onPress={() => setFilterType(filter.key)}
+                      style={[
+                        styles.filterOption,
+                        filterType === filter.key && styles.filterOptionActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.filterOptionText,
+                          filterType === filter.key && styles.filterOptionTextActive,
+                        ]}
+                      >
+                        {filter.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Sắp xếp theo giá */}
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterGroupTitle}>Sắp xếp theo giá</Text>
+                <View style={styles.filterOptions}>
+                  <TouchableOpacity
+                    onPress={() => setSortBy("price_asc")}
+                    style={[
+                      styles.filterOption,
+                      sortBy === "price_asc" && styles.filterOptionActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        sortBy === "price_asc" && styles.filterOptionTextActive,
+                      ]}
+                    >
+                      Giá tăng dần
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setSortBy("price_desc")}
+                    style={[
+                      styles.filterOption,
+                      sortBy === "price_desc" && styles.filterOptionActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        sortBy === "price_desc" && styles.filterOptionTextActive,
+                      ]}
+                    >
+                      Giá giảm dần
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Sắp xếp theo số lượng kho */}
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterGroupTitle}>Sắp xếp theo kho</Text>
+                <View style={styles.filterOptions}>
+                  <TouchableOpacity
+                    onPress={() => setSortBy("qty_asc")}
+                    style={[
+                      styles.filterOption,
+                      sortBy === "qty_asc" && styles.filterOptionActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        sortBy === "qty_asc" && styles.filterOptionTextActive,
+                      ]}
+                    >
+                      Kho tăng dần
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setSortBy("qty_desc")}
+                    style={[
+                      styles.filterOption,
+                      sortBy === "qty_desc" && styles.filterOptionActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        sortBy === "qty_desc" && styles.filterOptionTextActive,
+                      ]}
+                    >
+                      Kho giảm dần
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Sắp xếp theo tên */}
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterGroupTitle}>Sắp xếp theo tên</Text>
+                <View style={styles.filterOptions}>
+                  <TouchableOpacity
+                    onPress={() => setSortBy("name_asc")}
+                    style={[
+                      styles.filterOption,
+                      sortBy === "name_asc" && styles.filterOptionActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        sortBy === "name_asc" && styles.filterOptionTextActive,
+                      ]}
+                    >
+                      Tên A - Z
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setSortBy("name_desc")}
+                    style={[
+                      styles.filterOption,
+                      sortBy === "name_desc" && styles.filterOptionActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        sortBy === "name_desc" && styles.filterOptionTextActive,
+                      ]}
+                    >
+                      Tên Z - A
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Nút hành động */}
+              <View style={styles.filterModalActions}>
+                <AppButton
+                  title="Thiết lập lại"
+                  variant="outline"
+                  onPress={() => {
+                    setFilterType("all");
+                    setSortBy("default");
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <AppButton
+                  title="Áp dụng"
+                  onPress={() => setShowFilterModal(false)}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </View>
+          </View>
+        )}
+
         {screen === "list" ? (
           <View style={styles.content}>
             <FlatList
@@ -1243,145 +1545,62 @@ function ProductManagementApp() {
                     </Text>
 
                     <TouchableOpacity
-                      onPress={handleRefresh}
-                      disabled={busy || refreshing}
-                      style={styles.refreshLink}
+                      onPress={() => setShowOverview(!showOverview)}
+                      style={styles.toggleOverviewButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Ionicons
-                        name="refresh-outline"
-                        size={17}
-                        color={PRIMARY}
+                        name={showOverview ? "chevron-up" : "chevron-down"}
+                        size={15}
+                        color="#475569"
                       />
-
-                      <Text style={styles.refreshText}>
-                        Làm mới
+                      <Text style={styles.toggleOverviewText}>
+                        {showOverview ? "Thu gọn" : "Mở rộng"}
                       </Text>
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.dashboardGrid}>
-                    <StatCard
-                      title="Tổng sản phẩm"
-                      value={statistics.totalProducts}
-                      icon="cube-outline"
-                      onPress={() =>
-                        setFilterType("all")
-                      }
-                      active={filterType === "all"}
-                    />
-
-                    <StatCard
-                      title="Tổng số lượng kho"
-                      value={statistics.totalQuantity}
-                      icon="layers-outline"
-                      color="#2563eb"
-                      background="#eff6ff"
-                    />
-
-                    <StatCard
-                      title="Giá trị tồn kho"
-                      value={formatPrice(
-                        statistics.inventoryValue
-                      )}
-                      icon="wallet-outline"
-                      color="#16a34a"
-                      background="#f0fdf4"
-                    />
-
-                    <StatCard
-                      title="Sản phẩm sắp hết"
-                      value={statistics.lowStockCount}
-                      icon="warning-outline"
-                      color="#d97706"
-                      background="#fffbeb"
-                      onPress={() =>
-                        setFilterType("low_stock")
-                      }
-                      active={
-                        filterType === "low_stock"
-                      }
-                    />
-
-                    <StatCard
-                      title="Còn hàng"
-                      value={statistics.inStockCount}
-                      icon="checkmark-circle-outline"
-                      color="#16a34a"
-                      background="#f0fdf4"
-                      onPress={() =>
-                        setFilterType("in_stock")
-                      }
-                      active={
-                        filterType === "in_stock"
-                      }
-                    />
-
-                    <StatCard
-                      title="Hết hàng"
-                      value={statistics.outOfStockCount}
-                      icon="close-circle-outline"
-                      color="#dc2626"
-                      background="#fef2f2"
-                      onPress={() =>
-                        setFilterType("out_of_stock")
-                      }
-                      active={
-                        filterType === "out_of_stock"
-                      }
-                    />
-                  </View>
-
-                  {/* CẢNH BÁO TỒN KHO */}
-                  {statistics.lowStockCount > 0 ||
-                  statistics.outOfStockCount > 0 ? (
-                    <TouchableOpacity
-                      style={styles.warningBanner}
-                      onPress={() =>
-                        setFilterType(
-                          statistics.lowStockCount > 0
-                            ? "low_stock"
-                            : "out_of_stock"
-                        )
-                      }
-                    >
-                      <Ionicons
-                        name="warning-outline"
-                        size={22}
-                        color="#b45309"
+                  {showOverview ? (
+                    <View style={styles.dashboardGrid}>
+                      <StatCard
+                        title="Tổng sản phẩm"
+                        value={statistics.totalProducts}
+                        icon="cube-outline"
+                        isMobile={isMobile}
                       />
 
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.warningTitle}>
-                          Cảnh báo tồn kho
-                        </Text>
-
-                        <Text style={styles.warningText}>
-                          {
-                            statistics.lowStockCount
-                          }{" "}
-                          sản phẩm sắp hết,{" "}
-                          {
-                            statistics.outOfStockCount
-                          }{" "}
-                          sản phẩm hết hàng.
-                        </Text>
-                      </View>
-
-                      <Ionicons
-                        name="chevron-forward"
-                        size={18}
-                        color="#b45309"
+                      <StatCard
+                        title="Tổng tồn kho"
+                        value={statistics.totalQuantity}
+                        icon="layers-outline"
+                        color="#2563eb"
+                        background="#eff6ff"
+                        isMobile={isMobile}
                       />
-                    </TouchableOpacity>
+
+                      <StatCard
+                        title="Tổng tiền tồn kho"
+                        value={formatPrice(statistics.inventoryValue)}
+                        icon="cash-outline"
+                        color="#16a34a"
+                        background="#f0fdf4"
+                        isMobile={isMobile}
+                      />
+                    </View>
                   ) : null}
 
                   {/* TOOLBAR */}
                   <View style={styles.toolbar}>
-                    <View style={styles.searchBox}>
+                    <View
+                      style={[
+                        styles.searchBox,
+                        isSearchFocused && styles.searchBoxFocused,
+                      ]}
+                    >
                       <Ionicons
                         name="search-outline"
                         size={19}
-                        color="#94a3b8"
+                        color={isSearchFocused ? PRIMARY : "#94a3b8"}
                       />
 
                       <TextInput
@@ -1390,6 +1609,8 @@ function ProductManagementApp() {
                         placeholderTextColor="#94a3b8"
                         value={search}
                         onChangeText={setSearch}
+                        onFocus={() => setIsSearchFocused(true)}
+                        onBlur={() => setIsSearchFocused(false)}
                       />
 
                       {search.length > 0 ? (
@@ -1424,89 +1645,37 @@ function ProductManagementApp() {
                     </View>
                   </View>
 
-                  {/* BỘ LỌC */}
-                  <Text style={styles.controlLabel}>
-                    Lọc theo tình trạng
-                  </Text>
-
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={
-                      styles.filterContent
-                    }
-                  >
-                    {FILTERS.map((filter) => (
-                      <TouchableOpacity
-                        key={filter.key}
-                        onPress={() =>
-                          setFilterType(filter.key)
-                        }
-                        style={[
-                          styles.filterChip,
-                          filterType === filter.key &&
-                            styles.filterChipActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.filterChipText,
-                            filterType === filter.key &&
-                              styles.filterChipTextActive,
-                          ]}
-                        >
-                          {filter.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-
-                  {/* SẮP XẾP */}
-                  <Text style={styles.controlLabel}>
-                    Sắp xếp sản phẩm
-                  </Text>
-
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={
-                      styles.filterContent
-                    }
-                  >
-                    {SORT_OPTIONS.map((option) => (
-                      <TouchableOpacity
-                        key={option.key}
-                        onPress={() =>
-                          setSortBy(option.key)
-                        }
-                        style={[
-                          styles.filterChip,
-                          sortBy === option.key &&
-                            styles.filterChipActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.filterChipText,
-                            sortBy === option.key &&
-                              styles.filterChipTextActive,
-                          ]}
-                        >
-                          {option.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-
-                  {/* TIÊU ĐỀ DANH SÁCH */}
+                  {/* TIÊU ĐỀ DANH SÁCH + NÚT LỌC */}
                   <View style={styles.listHeading}>
                     <Text style={styles.sectionTitle}>
                       Danh sách sản phẩm
                     </Text>
 
-                    <Text style={styles.resultCount}>
-                      {filteredProducts.length} kết quả
-                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowFilterModal(true)}
+                      style={[
+                        styles.filterTrigger,
+                        isFilterActive && styles.filterTriggerActive,
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="options-outline"
+                        size={16}
+                        color={isFilterActive ? PRIMARY : "#64748b"}
+                      />
+                      <Text
+                        style={[
+                          styles.filterTriggerText,
+                          isFilterActive && styles.filterTriggerTextActive,
+                        ]}
+                      >
+                        Lọc
+                      </Text>
+                      {isFilterActive ? (
+                        <View style={styles.filterTriggerDot} />
+                      ) : null}
+                    </TouchableOpacity>
                   </View>
                 </View>
               }
@@ -1782,50 +1951,58 @@ const styles = StyleSheet.create({
 
   header: {
     backgroundColor: PRIMARY,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 8,
   },
 
   headerBrand: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
+    minWidth: 0,
+  },
+
+  headerBrandInfo: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
   },
 
   headerLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
   },
 
   headerTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
     color: "#ffffff",
   },
 
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#ffede8",
-    marginTop: 2,
+    marginTop: 1,
   },
 
   logoutButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 11,
-    paddingVertical: 9,
-    borderRadius: 20,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 18,
     backgroundColor: "rgba(255,255,255,0.18)",
+    flexShrink: 0,
   },
 
   logoutText: {
@@ -1857,99 +2034,113 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 10,
   },
 
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
     color: "#1e293b",
   },
 
-  refreshLink: {
+  toggleOverviewButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: "#f1f5f9",
   },
 
-  refreshText: {
-    fontSize: 13,
+  toggleOverviewText: {
+    fontSize: 12,
     fontWeight: "600",
-    color: PRIMARY,
+    color: "#475569",
   },
 
   // Dashboard
 
   dashboardGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "stretch",
     gap: 8,
     marginBottom: 14,
   },
 
   statCard: {
-    flexGrow: 1,
-    flexBasis: "30%",
-    minWidth: 105,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#ffffff",
     borderRadius: 12,
-    padding: 12,
-    borderWidth: 1.5,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
     borderColor: "#e2e8f0",
-    gap: 6,
+    gap: 9,
     elevation: 1,
   },
 
-  statCardActive: {
-    borderColor: PRIMARY,
-    backgroundColor: "#fffaf8",
+  statCardMobile: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "column",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    gap: 6,
   },
 
   statIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
 
+  statContent: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  statContentMobile: {
+    flex: 0,
+    alignItems: "center",
+    width: "100%",
+  },
+
   statValue: {
-    fontSize: 19,
+    fontSize: 16,
     fontWeight: "800",
     color: "#1e293b",
+    lineHeight: 20,
+  },
+
+  statValueMobile: {
+    fontSize: 18,
+    textAlign: "center",
   },
 
   statTitle: {
-    fontSize: 12,
+    fontSize: 11,
+    color: "#64748b",
+    fontWeight: "600",
+    marginTop: 1,
+  },
+
+  statTitleMobile: {
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 0,
+  },
+
+  statSubtitle: {
+    fontSize: 10,
     color: "#64748b",
     fontWeight: "500",
-  },
-
-  // Stock warning
-
-  warningBanner: {
-    backgroundColor: "#fffbeb",
-    borderColor: "#fde68a",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 14,
-  },
-
-  warningTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#92400e",
-  },
-
-  warningText: {
-    fontSize: 12,
-    color: "#b45309",
-    marginTop: 3,
-    lineHeight: 18,
+    marginTop: 2,
   },
 
   // Toolbar
@@ -1967,10 +2158,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#f8fafc",
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
     borderRadius: 9,
     paddingHorizontal: 12,
     minHeight: 44,
+  },
+
+  searchBoxFocused: {
+    borderColor: PRIMARY,
+    backgroundColor: "#ffffff",
+    ...Platform.select({
+      web: {
+        boxShadow: "0 0 0 3px rgba(238, 77, 45, 0.15)",
+      },
+    }),
   },
 
   searchInput: {
@@ -1978,6 +2181,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#1e293b",
     paddingVertical: 9,
+    ...Platform.select({
+      web: {
+        outlineStyle: "none",
+      },
+    }),
   },
 
   toolbarButtons: {
@@ -1985,45 +2193,88 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
-  // Filter / Sort
+  // Filter Modal (Shopee-style)
 
-  controlLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#475569",
-    marginBottom: 8,
-  },
-
-  filterContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingBottom: 14,
-  },
-
-  filterChip: {
+  filterModal: {
     backgroundColor: "#ffffff",
-    borderRadius: 20,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
+    borderRadius: 12,
+    marginHorizontal: 12,
+    marginBottom: 14,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     borderWidth: 1,
     borderColor: "#e2e8f0",
   },
 
-  filterChipActive: {
+  filterModalContent: {
+    padding: 16,
+  },
+
+  filterModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+
+  filterModalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#1e293b",
+  },
+
+  filterGroup: {
+    marginBottom: 18,
+  },
+
+  filterGroupTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#475569",
+    marginBottom: 10,
+  },
+
+  filterOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  filterOption: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+
+  filterOptionActive: {
     backgroundColor: "#fff1f0",
     borderColor: PRIMARY,
   },
 
-  filterChipText: {
-    color: "#64748b",
+  filterOptionText: {
     fontSize: 12,
     fontWeight: "600",
+    color: "#64748b",
   },
 
-  filterChipTextActive: {
+  filterOptionTextActive: {
     color: PRIMARY,
-    fontWeight: "800",
+    fontWeight: "700",
+  },
+
+  filterModalActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
   },
 
   listHeading: {
@@ -2037,6 +2288,44 @@ const styles = StyleSheet.create({
   resultCount: {
     color: "#64748b",
     fontSize: 12,
+  },
+
+  // Filter Trigger Button (next to "Danh sách sản phẩm")
+
+  filterTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#ffffff",
+  },
+
+  filterTriggerActive: {
+    borderColor: PRIMARY,
+    backgroundColor: "#fff1f0",
+  },
+
+  filterTriggerText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748b",
+  },
+
+  filterTriggerTextActive: {
+    color: PRIMARY,
+    fontWeight: "700",
+  },
+
+  filterTriggerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: PRIMARY,
+    marginLeft: 2,
   },
 
   // Product card
@@ -2194,6 +2483,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 9,
     padding: 12,
+  },
+
+  loginMessageBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
   },
 
   floatingMessage: {
@@ -2435,7 +2731,7 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "#cbd5e1",
     borderRadius: 9,
     paddingHorizontal: 12,
@@ -2444,12 +2740,33 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
   },
 
+  inputWrapperFocused: {
+    borderColor: PRIMARY,
+    backgroundColor: "#ffffff",
+    ...Platform.select({
+      web: {
+        boxShadow: "0 0 0 3px rgba(238, 77, 45, 0.15)",
+      },
+    }),
+  },
+
   fieldInput: {
     flex: 1,
     minHeight: 46,
     fontSize: 14,
     color: "#1e293b",
     paddingVertical: 8,
+    ...Platform.select({
+      web: {
+        outlineStyle: "none",
+      },
+    }),
+  },
+
+  inputAction: {
+    padding: 4,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   helperText: {
